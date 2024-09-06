@@ -5,7 +5,7 @@ import numpy as np
 import os
 import struct
 
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from itertools import combinations
 
 from .camera import Camera
@@ -314,7 +314,7 @@ class SceneManager:
 
             camera_struct = struct.Struct('IiQQ')
 
-            for camera_id, camera in sorted(self.cameras.iteritems()):
+            for camera_id, camera in sorted(self.cameras.items()):
                 fid.write(camera_struct.pack(
                     camera_id, camera.camera_type, camera.width, camera.height))
                 # TODO (True): should move this into the Camera class
@@ -322,12 +322,12 @@ class SceneManager:
 
     def _save_cameras_txt(self, output_file):
         with open(output_file, 'w') as fid:
-            print>>fid, '# Camera list with one line of data per camera:'
-            print>>fid, '#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]'
-            print>>fid, '# Number of cameras:', len(self.cameras)
+            fid.write('# Camera list with one line of data per camera:\n')
+            fid.write('#   CAMERA_ID, MODEL, WIDTH, HEIGHT, PARAMS[]\n')
+            fid.write(f'# Number of cameras: {len(self.cameras)}\n')
 
-            for camera_id, camera in sorted(self.cameras.iteritems()):
-                print>>fid, camera_id, camera
+            for camera_id, camera in sorted(self.cameras.items()):
+                fid.write(f'{camera_id}, {camera}\n')
 
     #---------------------------------------------------------------------------
 
@@ -349,7 +349,7 @@ class SceneManager:
         with open(output_file, 'wb') as fid:
             fid.write(struct.pack('L', len(self.images)))
 
-            for image_id, image in self.images.iteritems():
+            for image_id, image in self.images.items():
                 fid.write(struct.pack('I', image_id))
                 fid.write(image.q.q.tobytes())
                 fid.write(image.tvec.tobytes())
@@ -362,17 +362,16 @@ class SceneManager:
 
     def _save_images_txt(self, output_file):
         with open(output_file, 'w') as fid:
-            print>>fid, '# Image list with two lines of data per image:'
-            print>>fid, '#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME'
-            print>>fid, '#   POINTS2D[] as (X, Y, POINT3D_ID)'
-            print>>fid, '# Number of images: {},'.format(len(self.images)),
-            print>>fid, 'mean observations per image: unknown'
+            fid.write('# Image list with two lines of data per image:\n')
+            fid.write('#   IMAGE_ID, QW, QX, QY, QZ, TX, TY, TZ, CAMERA_ID, NAME\n')
+            fid.write('#   POINTS2D[] as (X, Y, POINT3D_ID)\n')
+            fid.write(f'# Number of images: {len(self.images)}, mean observations per image: unknown\n')
 
-            for image_id, image in self.images.iteritems():
-                print>>fid, image_id,
-                print>>fid, ' '.join(str(qi) for qi in image.q.q),
-                print>>fid, ' '.join(str(ti) for ti in image.tvec),
-                print>>fid, image.camera_id, image.name
+            for image_id, image in self.images.items():
+                fid.write(f'{image_id} '),
+                fid.write(' '.join(str(qi) for qi in image.q.q) + ' ')
+                fid.write(' '.join(str(ti) for ti in image.tvec) + ' ')
+                fid.write(f'{image.camera_id}, {image.name}\n')
 
                 data = np.rec.fromarrays(
                     (image.points2D[:,0], image.points2D[:,1],
@@ -400,11 +399,11 @@ class SceneManager:
 
     def _save_points3D_bin(self, output_file):
         num_valid_points3D = sum(
-            1 for point3D_idx in self.point3D_id_to_point3D_idx.itervalues()
+            1 for point3D_idx in self.point3D_id_to_point3D_idx.values()
             if point3D_idx != SceneManager.INVALID_POINT3D)
 
         iter_point3D_id_to_point3D_idx = \
-            self.point3D_id_to_point3D_idx.iteritems()
+            self.point3D_id_to_point3D_idx.items()
 
         with open(output_file, 'wb') as fid:
             fid.write(struct.pack('Q', num_valid_points3D))
@@ -423,31 +422,28 @@ class SceneManager:
 
     def _save_points3D_txt(self, output_file):
         num_valid_points3D = sum(
-            1 for point3D_idx in self.point3D_id_to_point3D_idx.itervalues()
+            1 for point3D_idx in self.point3D_id_to_point3D_idx.values()
             if point3D_idx != SceneManager.INVALID_POINT3D)
 
         array_to_string = lambda arr: ' '.join(str(x) for x in arr)
 
         iter_point3D_id_to_point3D_idx = \
-            self.point3D_id_to_point3D_idx.iteritems()
+            self.point3D_id_to_point3D_idx.items()
 
         with open(output_file, 'w') as fid:
-            print>>fid, '# 3D point list with one line of data per point:'
-            print>>fid, '#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as ',
-            print>>fid, '(IMAGE_ID, POINT2D_IDX)'
-            print>>fid, '# Number of points: {},'.format(num_valid_points3D),
-            print>>fid, 'mean track length: unknown'
+            fid.write('# 3D point list with one line of data per point:\n')
+            fid.write('#   POINT3D_ID, X, Y, Z, R, G, B, ERROR, TRACK[] as (IMAGE_ID, POINT2D_IDX)\n')
+            fid.write(f'# Number of points: {num_valid_points3D}, mean track length: unknown\n')
 
             for point3D_id, point3D_idx in iter_point3D_id_to_point3D_idx:
                 if point3D_idx == SceneManager.INVALID_POINT3D:
                     continue
 
-                print>>fid, point3D_id,
-                print>>fid, array_to_string(self.points3D[point3D_idx]),
-                print>>fid, array_to_string(self.point3D_colors[point3D_idx]),
-                print>>fid, self.point3D_errors[point3D_idx],
-                print>>fid, array_to_string(
-                    self.point3D_id_to_images[point3D_id].flat)
+                fid.write(f'{point3D_id} ')
+                fid.write(f'{array_to_string(self.points3D[point3D_idx])} ')
+                fid.write(f'{array_to_string(self.point3D_colors[point3D_idx])} ')
+                fid.write(f'{self.point3D_errors[point3D_idx]} ')
+                fid.write(f'{array_to_string(self.point3D_id_to_images[point3D_id].flat)}\n')
 
     #---------------------------------------------------------------------------
 
@@ -525,7 +521,7 @@ class SceneManager:
         image = self.images[image_id]
 
         # get unfiltered points
-        point3D_idxs = set(self.point3D_id_to_point3D_idx.itervalues())
+        point3D_idxs = set(self.point3D_id_to_point3D_idx.values())
         point3D_idxs.discard(SceneManager.INVALID_POINT3D)
         point3D_idxs = list(point3D_idxs)
         points3D = self.points3D[point3D_idxs,:]
@@ -571,12 +567,12 @@ class SceneManager:
             if image_id in self.images:
                 del self.images[image_id]
 
-        keep_set = set(self.images.iterkeys())
+        keep_set = set(self.images.keys())
 
         # delete references to specified images, and ignore any points that are
         # invalidated
         iter_point3D_id_to_point3D_idx = \
-            self.point3D_id_to_point3D_idx.iteritems()
+            self.point3D_id_to_point3D_idx.items()
 
         for point3D_id, point3D_idx in iter_point3D_id_to_point3D_idx:
             if point3D_idx == SceneManager.INVALID_POINT3D:
@@ -608,7 +604,7 @@ class SceneManager:
             min_tri_prod = np.cos(np.radians(max_tri_angle))
 
         iter_point3D_id_to_point3D_idx = \
-            self.point3D_id_to_point3D_idx.iteritems()
+            self.point3D_id_to_point3D_idx.items()
 
         image_ids = []
 
@@ -647,7 +643,7 @@ class SceneManager:
                         SceneManager.INVALID_POINT3D
 
         # apply the filters to the image point3D_ids
-        for image in self.images.itervalues():
+        for image in self.images.values():
             mask = np.array([
                 self.point3D_id_to_point3D_idx.get(point3D_id, 0) \
                     == SceneManager.INVALID_POINT3D
@@ -659,7 +655,7 @@ class SceneManager:
     # scene graph: {image_id: [image_id: #shared points]}
     def build_scene_graph(self):
         self.scene_graph = defaultdict(lambda: defaultdict(int))
-        point3D_iter = self.point3D_id_to_images.iteritems()
+        point3D_iter = self.point3D_id_to_images.items()
 
         for i, (point3D_id, images) in enumerate(point3D_iter):
             if not self.point3D_valid(point3D_id):
