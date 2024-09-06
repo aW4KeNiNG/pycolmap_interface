@@ -327,7 +327,7 @@ class SceneManager:
             fid.write(f'# Number of cameras: {len(self.cameras)}\n')
 
             for camera_id, camera in sorted(self.cameras.items()):
-                fid.write(f'{camera_id}, {camera}\n')
+                fid.write(f'{camera_id} {camera}\n')
 
     #---------------------------------------------------------------------------
 
@@ -354,7 +354,9 @@ class SceneManager:
                 fid.write(image.q.q.tobytes())
                 fid.write(image.tvec.tobytes())
                 fid.write(struct.pack('I', image.camera_id))
-                fid.write(image.name + '\0')
+                for char in image.name:
+                    fid.write(char.encode("utf-8"))
+                fid.write(b"\x00")
                 fid.write(struct.pack('Q', len(image.points2D)))
                 data = np.rec.fromarrays(
                     (image.points2D[:,0], image.points2D[:,1], image.point3D_ids))
@@ -371,15 +373,12 @@ class SceneManager:
                 fid.write(f'{image_id} '),
                 fid.write(' '.join(str(qi) for qi in image.q.q) + ' ')
                 fid.write(' '.join(str(ti) for ti in image.tvec) + ' ')
-                fid.write(f'{image.camera_id}, {image.name}\n')
+                fid.write(f'{image.camera_id} {image.name}\n')
 
-                data = np.rec.fromarrays(
-                    (image.points2D[:,0], image.points2D[:,1],
-                     image.point3D_ids.astype(np.int64)))
-                if len(data) > 0:
-                    np.savetxt(fid, data, '%.2f %.2f %d', newline=' ')
-                    fid.seek(-1, os.SEEK_CUR)
-                fid.write('\n')
+                points_strings = []
+                for xy, point3D_id in zip(image.points2D, image.point3D_ids):
+                    points_strings.append(" ".join(map(str, [*xy, point3D_id])))
+                fid.write(" ".join(points_strings) + "\n")
 
     #---------------------------------------------------------------------------
 
@@ -443,7 +442,7 @@ class SceneManager:
                 fid.write(f'{array_to_string(self.points3D[point3D_idx])} ')
                 fid.write(f'{array_to_string(self.point3D_colors[point3D_idx])} ')
                 fid.write(f'{self.point3D_errors[point3D_idx]} ')
-                fid.write(f'{array_to_string(self.point3D_id_to_images[point3D_id].flat)}\n')
+                fid.write(f'{array_to_string(self.point3D_id_to_images[point3D_id].flatten())}\n')
 
     #---------------------------------------------------------------------------
 
