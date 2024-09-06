@@ -347,7 +347,7 @@ class SceneManager:
 
     def _save_images_bin(self, output_file):
         with open(output_file, 'wb') as fid:
-            fid.write(struct.pack('L', len(self.images)))
+            fid.write(struct.pack('Q', len(self.images)))
 
             for image_id, image in self.images.items():
                 fid.write(struct.pack('I', image_id))
