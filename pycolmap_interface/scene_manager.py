@@ -195,7 +195,7 @@ class SceneManager:
                 if is_camera_description_line:
                     image_id = int(data[0])
                     image = Image(data[-1], int(data[-2]),
-                                  Quaternion(np.array(map(float, data[1:5]))),
+                                  Quaternion(np.array(list(map(float, data[1:5])))),
                                   np.array(map(float, data[5:8])))
                 else:
                     image.points2D = np.array(
